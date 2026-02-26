@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Dog Collar</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        h1 { color: #00e676; }
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            width: 100%;
+            max-width: 400px;
+            margin-top: 20px;
+        }
+        .card {
+            background-color: #1e1e1e;
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        .card.full-width { grid-column: span 2; }
+        .value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin: 10px 0;
+            color: #29b6f6;
+        }
+        .label {
+            font-size: 0.9em;
+            color: #aaaaaa;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .btn {
+            background-color: #00e676;
+            color: #121212;
+            border: none;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border-radius: 30px;
+            cursor: pointer;
+            margin-top: 20px;
+            width: 100%;
+            max-width: 300px;
+            transition: background-color 0.3s;
+        }
+        .btn:active { background-color: #00c853; }
+        #status { margin-top: 15px; color: #aaaaaa; }
+    </style>
+</head>
+<body>
+
+    <h1>🐾 Dog Activity</h1>
+    <button class="btn" id="connectBtn">Connect Collar</button>
+    <div id="status">Status: Disconnected</div>
+
+    <div class="dashboard">
+        <div class="card full-width">
+            <div class="label">Total Steps</div>
+            <div class="value" id="stepsVal">0</div>
+        </div>
+        <div class="card">
+            <div class="label">🐕 Running</div>
+            <div class="value" id="runVal">0s</div>
+        </div>
+        <div class="card">
+            <div class="label">🦮 Walking</div>
+            <div class="value" id="walkVal">0s</div>
+        </div>
+    </div>
+
+    <script>
+        // UUIDs must match the ESP32 code exactly
+        const serviceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
+        const characteristicUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
+
+        const connectBtn = document.getElementById('connectBtn');
+        const statusText = document.getElementById('status');
+        const stepsVal = document.getElementById('stepsVal');
+        const runVal = document.getElementById('runVal');
+        const walkVal = document.getElementById('walkVal');
+
+        connectBtn.addEventListener('click', async () => {
+            try {
+                statusText.innerText = "Status: Scanning...";
+                
+                // Request the Bluetooth device
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'DogCollar_Live' }],
+                    optionalServices: [serviceUuid]
+                });
+
+                statusText.innerText = "Status: Connecting...";
+                
+                // Connect to the GATT server
+                const server = await device.gatt.connect();
+                const service = await server.getPrimaryService(serviceUuid);
+                const characteristic = await service.getCharacteristic(characteristicUuid);
+
+                // Start reading the live data
+                await characteristic.startNotifications();
+                statusText.innerText = "Status: Connected 🟢";
+                connectBtn.style.display = "none"; // Hide button once connected
+
+                // Handle incoming data
+                characteristic.addEventListener('characteristicvaluechanged', (event) => {
+                    let decoder = new TextDecoder('utf-8');
+                    let rawData = decoder.decode(event.target.value);
+                    
+                    // ESP32 sends data as "Steps,RunSec,WalkSec"
+                    let dataArray = rawData.split(',');
+                    
+                    if(dataArray.length === 3) {
+                        stepsVal.innerText = dataArray[0];
+                        
+                        // Format seconds into Minutes:Seconds if it gets high enough
+                        runVal.innerText = formatTime(dataArray[1]);
+                        walkVal.innerText = formatTime(dataArray[2]);
+                    }
+                });
+
+                // Handle disconnection
+                device.addEventListener('gattserverdisconnected', () => {
+                    statusText.innerText = "Status: Disconnected 🔴";
+                    connectBtn.style.display = "block";
+                });
+
+            } catch (error) {
+                console.error(error);
+                statusText.innerText = "Error: " + error;
+            }
+        });
+
+        // Helper function to turn seconds into a nice "1m 30s" format
+        function formatTime(secondsStr) {
+            let totalSeconds = parseInt(secondsStr);
+            if (totalSeconds < 60) return totalSeconds + "s";
+            let minutes = Math.floor(totalSeconds / 60);
+            let seconds = totalSeconds % 60;
+            return minutes + "m " + seconds + "s";
+        }
+    </script>
+</body>
+</html>

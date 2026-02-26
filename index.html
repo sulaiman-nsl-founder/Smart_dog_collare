@@ -4,6 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Dog Collar</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#00e676">
+    
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -84,7 +88,7 @@
     </div>
 
     <script>
-        // UUIDs must match the ESP32 code exactly
+        // --- 1. Web Bluetooth Logic ---
         const serviceUuid = "4fafc201-1fb5-459e-8fcc-c5c9c331914b";
         const characteristicUuid = "beb5483e-36e1-4688-b7f5-ea07361b26a8";
 
@@ -97,43 +101,32 @@
         connectBtn.addEventListener('click', async () => {
             try {
                 statusText.innerText = "Status: Scanning...";
-                
-                // Request the Bluetooth device
                 const device = await navigator.bluetooth.requestDevice({
                     filters: [{ name: 'DogCollar_Live' }],
                     optionalServices: [serviceUuid]
                 });
 
                 statusText.innerText = "Status: Connecting...";
-                
-                // Connect to the GATT server
                 const server = await device.gatt.connect();
                 const service = await server.getPrimaryService(serviceUuid);
                 const characteristic = await service.getCharacteristic(characteristicUuid);
 
-                // Start reading the live data
                 await characteristic.startNotifications();
                 statusText.innerText = "Status: Connected 🟢";
-                connectBtn.style.display = "none"; // Hide button once connected
+                connectBtn.style.display = "none"; 
 
-                // Handle incoming data
                 characteristic.addEventListener('characteristicvaluechanged', (event) => {
                     let decoder = new TextDecoder('utf-8');
                     let rawData = decoder.decode(event.target.value);
-                    
-                    // ESP32 sends data as "Steps,RunSec,WalkSec"
                     let dataArray = rawData.split(',');
                     
                     if(dataArray.length === 3) {
                         stepsVal.innerText = dataArray[0];
-                        
-                        // Format seconds into Minutes:Seconds if it gets high enough
                         runVal.innerText = formatTime(dataArray[1]);
                         walkVal.innerText = formatTime(dataArray[2]);
                     }
                 });
 
-                // Handle disconnection
                 device.addEventListener('gattserverdisconnected', () => {
                     statusText.innerText = "Status: Disconnected 🔴";
                     connectBtn.style.display = "block";
@@ -145,13 +138,21 @@
             }
         });
 
-        // Helper function to turn seconds into a nice "1m 30s" format
         function formatTime(secondsStr) {
             let totalSeconds = parseInt(secondsStr);
             if (totalSeconds < 60) return totalSeconds + "s";
             let minutes = Math.floor(totalSeconds / 60);
             let seconds = totalSeconds % 60;
             return minutes + "m " + seconds + "s";
+        }
+
+        // --- 2. Service Worker Registration (Required for App Install) ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('Service Worker Registered!'))
+                    .catch(err => console.log('Service worker failed', err));
+            });
         }
     </script>
 </body>

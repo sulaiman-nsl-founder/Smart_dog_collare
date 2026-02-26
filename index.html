@@ -152,13 +152,6 @@
             let minutes = Math.floor(totalSeconds / 60);
             let seconds = totalSeconds % 60;
             return minutes + "m " + seconds + "s";
-            
-        if ('serviceWorker' in navigator) {
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register('sw.js')
-                        .then(reg => console.log('Service Worker Registered!'))
-                        .catch(err => console.log('Service worker failed', err));
-                });
         }
     </script>
 </body>
